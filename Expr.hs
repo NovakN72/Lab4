@@ -1,3 +1,4 @@
+module Expr where
 import Parsing
 import Data.Char
 import Test.QuickCheck
@@ -68,8 +69,6 @@ eval (Cos ex) varValue = Prelude.cos (eval ex varValue)
 eval (Add ex1 ex2) varValue =  eval ex1 varValue + eval ex2 varValue
 eval (Mul ex1 ex2) varValue =  eval ex1 varValue * eval ex2 varValue
 
-ex :: Expr 
-ex = Sin (Add (Num 3.2) Var) 
 
 --D
 readExpr :: String -> Maybe Expr
@@ -142,27 +141,46 @@ instance Arbitrary Expr where
 
 --F
 simplify :: Expr -> Expr
-simplify (Add (Num a) (Num b)) = Num $ a + b
-simplify (Add Var (Num 0))   = Var
-simplify (Add (Num 0) Var)   = Var 
-simplify (Mul (Num a) (Num b)) = Num $ a * b
-simplify (Mul Var (Num 0))   = Num 0
-simplify (Mul (Num 0) Var)   = Num 0 
-simplify (Mul Var (Num 1))   = Var
-simplify (Mul (Num 1) Var)   = Var
-simplify e                   = e
+simplify ex = 
+    let simEx = simplifyHelper ex 
+    in if simEx == ex
+       then simEx 
+    else simplify simEx
+
+
+simplifyHelper :: Expr -> Expr
+simplifyHelper (Num n) = Num n
+simplifyHelper Var = Var
+
+simplifyHelper (Add (Num a) (Num b)) = Num $ a + b
+simplifyHelper (Add ex (Num 0))   = simplify ex
+simplifyHelper (Add (Num 0) ex)   = simplify ex 
+simplifyHelper (Add ex1 ex2) = Add (simplify ex1) (simplify ex2)
+
+
+simplifyHelper (Mul (Num a) (Num b)) = Num $ a * b
+simplifyHelper (Mul ex (Num 0))   = Num 0
+simplifyHelper (Mul (Num 0) ex)   = Num 0 
+simplifyHelper (Mul ex (Num 1))   = simplify ex
+simplifyHelper (Mul (Num 1) ex)   = simplify ex
+simplifyHelper (Mul ex1 ex2) = Mul (simplify ex1) (simplify ex2)
+
+simplifyHelper (Sin ex) = Sin (simplify ex)
+simplifyHelper (Cos ex) = Cos (simplify ex)
+simplifyHelper (Sin (Num n)) = Num (Prelude.sin n)
+simplifyHelper (Sin (Num n)) = Num (Prelude.cos n)
+
+
 
 prop_simplify :: Expr -> Double -> Bool 
 prop_simplify ex n = eval ex n == eval (simplify ex) n 
 
 --G
 differentiate :: Expr -> Expr
-differentiate Var = Num 1 
-differentiate Num = 0 
-differentiate Add ex1 ex2 = ((differentiate ex1) * ex2) + ((differentiate ex2) * ex1)
-differentiate Sin ex = Cos ex 
-differentiate Cos ex = -Sin ex
-differentiate Mul ex1 ex2 = 
-
-
+differentiate Var         = Num 1 
+differentiate (Num n)         = Num 0 
+differentiate (Add ex1 ex2) = simplify $ Add (differentiate ex1) (differentiate ex2)
+differentiate (Sin ex)      = simplify $ Mul (differentiate ex) (Cos ex) 
+differentiate (Cos ex)      = simplify $ Mul (differentiate ex) (Mul(Num (-1)) (Sin ex))
+differentiate (Mul ex1 ex2) = simplify $ Add (Mul (differentiate ex1) ex2) (Mul ex1 (differentiate ex2))
 
